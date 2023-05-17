@@ -1,55 +1,76 @@
 import * as geom from 'jsts/org/locationtech/jts/geom.js';
 import * as linear from 'jsts/org/locationtech/jts/linearref.js';
+// Monkey-patches the bundled ES6 version of JSTS to add some missing methods, like `Geometry.prototype.intersects()`.
+import 'jsts/org/locationtech/jts/monkey.js';
+
+const LABEL_WIDTH = 100;
+const LABEL_HEIGHT = 50;
 
 const GeometryFactory = new geom.GeometryFactory();
 
-function getMiddlePoint(vertices) {
-  // Calculate total length of a polyline
-  let totalLength = 0;
-  for(let i = 1; i < vertices.length; i++) {
-      const dx = vertices[i][0] - vertices[i - 1][0];
-      const dy = vertices[i][1] - vertices[i - 1][1];
-      totalLength += Math.hypot(dx, dy);
+function parsePolylines(lines) {
+  // console.time('parse polylines');
+  const result = lines.map((vertices) => {
+    const coordinates = vertices.map((vertex) => {
+      return new geom.Coordinate(vertex[0], vertex[1]);
+    })
+
+    return  GeometryFactory.createLineString(coordinates);
+  });
+
+  // console.timeEnd('parse polylines');
+
+  return result;
+}
+
+function getMiddlePoint(polyline) {
+  // console.time('get middle point');
+  const lengthIndexedLine = new linear.LengthIndexedLine(polyline);
+  const midpoint = lengthIndexedLine.extractPoint(polyline.getLength() / 2);
+
+  // console.timeEnd('get middle point');
+
+  return { x: Math.round(midpoint.x), y: Math.round(midpoint.y)};
+}
+
+function findBestLabelPosition(thisLine, otherLines) {
+  const anchorCoordinates = getMiddlePoint(thisLine);
+  // const { x, y } = anchorCoordinates;
+  const x = anchorCoordinates.x + 1; // trying to add offsets to make the polygon vertex to not touch the anchor point
+  const y = anchorCoordinates.y + 1;
+  console.log(x, y)
+  const labelDirections = {
+    'top-right': [1, 1],
+    'top-left': [-1, 1],
+    'bottom-right': [1, -1],
+    'bottom-left': [-1, -1],
+  };
+
+  for (const direction of Object.keys(labelDirections)) {
+    const [dx, dy] = labelDirections[direction];
+    const labelBoundingBox = GeometryFactory.createPolygon([
+      new geom.Coordinate(x, y),
+      new geom.Coordinate(x + dx * LABEL_WIDTH, y),
+      new geom.Coordinate(x + dx * LABEL_WIDTH, y + dy * LABEL_HEIGHT),
+      new geom.Coordinate(x, y + dy * LABEL_HEIGHT),
+      new geom.Coordinate(x, y)
+    ]);
+
+    // Check if the label covers the polyline
+    if (thisLine.intersects(labelBoundingBox)) {
+      console.log("The label covers the polyline, direction: ", direction);
+    } else {
+      console.log("DOESN'T cover the polyline, direction:", direction);
+    }
   }
-
-  // Find midpoint
-  const midpointLength = totalLength / 2;
-  let accumulatedLength = 0;
-  for(let i = 1; i < vertices.length; i++) {
-      const dx = vertices[i][0] - vertices[i - 1][0];
-      const dy = vertices[i][1] - vertices[i - 1][1];
-      const segmentLength = Math.hypot(dx, dy);
-
-      if(accumulatedLength + segmentLength >= midpointLength) {
-          // Interpolate the midpoint within this segment
-          const ratio = (midpointLength - accumulatedLength) / segmentLength;
-          return {
-              x: vertices[i - 1][0] + ratio * dx,
-              y: vertices[i - 1][1] + ratio * dy
-          };
-      }
-      else {
-          accumulatedLength += segmentLength;
-      }
-  }
-
-  // The polyline is empty or has only one point
-  return null;
 }
 
 function processInput(lines) {
   // console.log('Processing input, received: ', lines);
-  lines.forEach((line) => {
-    // console.log('Line:', line)
-    console.time('raw midpoint');
-    console.log('Middle point:', getMiddlePoint(line));
-    console.timeEnd('raw midpoint');
-
-    console.time('jsts midpoint');
-    console.log('Middle point with jsts:', getMiddlePointWithJSTS(line));
-    console.timeEnd('jsts midpoint');
+  const allPolylines = parsePolylines(lines);
+  allPolylines.forEach((polyline) => {
+    findBestLabelPosition(polyline, allPolylines);
   });
-
 }
 
 function parseInput(callback) {
