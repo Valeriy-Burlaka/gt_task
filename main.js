@@ -98,7 +98,6 @@ function parseInput(callback) {
 
       callback(parsedLines);
     }
-  
     // console.log('Finished processing input');
   });
 }
