@@ -2,15 +2,21 @@
   "name": "GreenTriangle_challenge",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "dist/main.js",
+  "type":"module",
   "scripts": {
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": "Valerii Burlaka",
   "license": "ISC",
   "dependencies": {
     "jsts": "^2.9.3"
   },
-  "type": "module"
+  "devDependencies": {
+    "@types/node": "^16.11.12",
+    "ts-node": "^10.2.1",
+    "typescript": "^4.1.3"
+  }
 }
