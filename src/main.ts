@@ -8,14 +8,17 @@ const LABEL_HEIGHT = 50;
 
 const GeometryFactory = new geom.GeometryFactory();
 
-function parsePolylines(lines) {
+type Point = [number, number];
+type Polyline = Point[];
+
+function parsePolylines(lines: Polyline[]) {
   // console.time('parse polylines');
-  const result = lines.map((vertices) => {
-    const coordinates = vertices.map((vertex) => {
-      return new geom.Coordinate(vertex[0], vertex[1]);
+  const result = lines.map((points) => {
+    const coordinates = points.map((p) => {
+      return new geom.Coordinate(p[0], p[1]);
     })
 
-    return  GeometryFactory.createLineString(coordinates);
+    return GeometryFactory.createLineString(coordinates);
   });
 
   // console.timeEnd('parse polylines');
@@ -31,6 +34,66 @@ function getMiddlePoint(polyline) {
   // console.timeEnd('get middle point');
 
   return { x: Math.round(midpoint.x), y: Math.round(midpoint.y)};
+}
+
+function distanceBetweenPoints(a: Point, b: Point) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+
+  return Math.hypot(dx, dy);
+}
+
+function slope(a: Point, b: Point) {
+  return (b[1] - a[1]) / (b[0] - a[0]);
+}
+
+function hasPerpendicularSlope(slope: number) {
+  return !isFinite(slope);
+}
+
+function findPolylineMidpoint(line: Polyline) {
+  // Calculate total polyline length
+  let totalLength = 0;
+  for(let i = 1; i < line.length; i++) {
+      totalLength += distanceBetweenPoints(line[i - 1], line[i]);
+  }
+  const halfLength = totalLength / 2;
+
+  // Find "optimal" midpoint.
+  // What "optimal" means is that if the midpoint falls on a line segment that is perpendicular to either X or Y axis,
+  // we don't want to use this point, as it will be hard to place a label there (label side will merge with the line segment).
+  // If this happens to be the case, we will use the next vertex on the polyline.
+  let accumulatedLength = 0;
+  for(let i = 1; i < line.length; i++) {
+      const a = line[i - 1];
+      const b = line[i];
+      const segmentLength = distanceBetweenPoints(a, b);
+
+      if(accumulatedLength + segmentLength >= halfLength) {
+          // The segment is perpendicular to either X or Y axis, - use the next vertex as the midpoint.
+          if (hasPerpendicularSlope(slope(a, b))) {
+            return {
+              x: b[0],
+              y: b[1],
+            };
+          }
+          // The segment has an "aesthetic" slope, - interpolate the midpoint within this segment.
+          const remainingDistanceToMidpoint = halfLength - accumulatedLength;
+          const ratio = remainingDistanceToMidpoint / segmentLength;
+          const dx = b[0] - a[0];
+          const dy = b[1] - a[1];
+          return {
+              x: Math.round(a[0] + ratio * dx),
+              y: Math.round(a[1] + ratio * dy),
+          };
+      }
+      else {
+          accumulatedLength += segmentLength;
+      }
+  }
+
+  // The polyline is empty or has only one point
+  return null;
 }
 
 function findBestLabelPosition(thisLine, otherLines) {
@@ -65,7 +128,7 @@ function findBestLabelPosition(thisLine, otherLines) {
   }
 }
 
-function processInput(lines) {
+function processInput(lines: Polyline[]) {
   // console.log('Processing input, received: ', lines);
   const allPolylines = parsePolylines(lines);
   allPolylines.forEach((polyline) => {
